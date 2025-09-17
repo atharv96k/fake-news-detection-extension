@@ -11,6 +11,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "factCheck") {
     const claim = info.selectionText;
 
+    // Step 1: Show "loading" popup immediately
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (claim) => {
+        chrome.runtime.sendMessage({
+          action: "showFactCheckResult",
+          claim,
+          result: {
+            verdict: "Loading…",
+            confidence_percentage: "—"
+          }
+        });
+      },
+      args: [claim]
+    });
+
+    // Step 2: Call API
     try {
       const res = await fetch("https://fake-news-detection-n9cs.onrender.com/fact-check", {
         method: "POST",
@@ -20,7 +37,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
       const data = await res.json();
 
-      // ✅ Send message to content script instead of alert
+      // Step 3: Update popup with real result
       chrome.tabs.sendMessage(tab.id, {
         action: "showFactCheckResult",
         claim,
@@ -29,15 +46,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     } catch (err) {
       console.error("Error:", err);
-
       chrome.tabs.sendMessage(tab.id, {
         action: "showFactCheckResult",
         claim,
         result: {
-          verdict: "Error",
-          confidence_percentage: 0,
-          top_3_sources: [],
-          error: "Could not fact-check. Check console for details."
+          verdict: "Error ❌",
+          confidence_percentage: "—"
         }
       });
     }
